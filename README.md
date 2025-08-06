@@ -1,135 +1,59 @@
-# Template for Isaac Lab Projects
+# Reinforcement Learning for Peg Insertion with Force Sensing
 
-## Overview
+This project is built on the Isaac Lab framework and focuses on reinforcement learning for contact-rich peg-in-hole insertion tasks. The system is trained to perform precise and compliant insertion using force sensing and hybrid control strategies, aiming for robust sim-to-real policy transfer.
 
-This project/repository serves as a template for building projects or extensions based on Isaac Lab.
-It allows you to develop in an isolated environment, outside of the core Isaac Lab repository.
+The environment supports parallelized training using thousands of simulations, leveraging domain randomization and sparse + dense reward structures.
 
-**Key Features:**
+## Environment Setup
 
-- `Isolation` Work outside the core Isaac Lab repository, ensuring that your development efforts remain self-contained.
-- `Flexibility` This template is set up to allow your code to be run as an extension in Omniverse.
+Please follow the official Isaac Lab installation guide first:  
+[https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html)
 
-**Keywords:** extension, template, isaaclab
+Then activate your Isaac Lab Conda environment:
 
-## Installation
+```
+conda activate env_isaaclab
+```
 
-- Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html).
-  We recommend using the conda installation as it simplifies calling Python scripts from the terminal.
+Navigate to the `source` directory and install the module (if applicable):
 
-- Clone or copy this project/repository separately from the Isaac Lab installation (i.e. outside the `IsaacLab` directory):
+```
+cd ~/peg_insertion/source
+pip install -e .
+```
 
-- Using a python interpreter that has Isaac Lab installed, install the library in editable mode using:
+## Training the Policy
 
-    ```bash
-    # use 'PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-    python -m pip install -e source/peg_insertion
+To start training the peg insertion task using reinforcement learning, run:
 
-- Verify that the extension is correctly installed by:
+```
+python scripts/rl_games/train.py --task=Isaac-Factory-PegInsert-Direct-v0 --num_envs 64 --headless
+```
 
-    - Listing the available tasks:
+The training will use 64 parallel environments and run in headless mode.
 
-        Note: It the task name changes, it may be necessary to update the search pattern `"Template-"`
-        (in the `scripts/list_envs.py` file) so that it can be listed.
+## Logs and Output
 
-        ```bash
-        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-        python scripts/list_envs.py
-        ```
+- Training logs, checkpoints, and TensorBoard summaries are saved in:
 
-    - Running a task:
+```
+/home/fortiss/peg_insertion/logs
+```
 
-        ```bash
-        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-        python scripts/<RL_LIBRARY>/train.py --task=<TASK_NAME>
-        ```
+- Evaluation videos and success metrics may be saved in:
 
-    - Running a task with dummy agents:
+```
+/home/fortiss/peg_insertion/outputs
+```
 
-        These include dummy agents that output zero or random agents. They are useful to ensure that the environments are configured correctly.
+- Raw contact force data (for debugging or reward shaping) is stored in:
 
-        - Zero-action agent
-
-            ```bash
-            # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-            python scripts/zero_agent.py --task=<TASK_NAME>
-            ```
-        - Random-action agent
-
-            ```bash
-            # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-            python scripts/random_agent.py --task=<TASK_NAME>
-            ```
-
-### Set up IDE (Optional)
-
-To setup the IDE, please follow these instructions:
-
-- Run VSCode Tasks, by pressing `Ctrl+Shift+P`, selecting `Tasks: Run Task` and running the `setup_python_env` in the drop down menu.
-  When running this task, you will be prompted to add the absolute path to your Isaac Sim installation.
-
-If everything executes correctly, it should create a file .python.env in the `.vscode` directory.
-The file contains the python paths to all the extensions provided by Isaac Sim and Omniverse.
-This helps in indexing all the python modules for intelligent suggestions while writing code.
-
-### Setup as Omniverse Extension (Optional)
-
-We provide an example UI extension that will load upon enabling your extension defined in `source/peg_insertion/peg_insertion/ui_extension_example.py`.
-
-To enable your extension, follow these steps:
-
-1. **Add the search path of this project/repository** to the extension manager:
-    - Navigate to the extension manager using `Window` -> `Extensions`.
-    - Click on the **Hamburger Icon**, then go to `Settings`.
-    - In the `Extension Search Paths`, enter the absolute path to the `source` directory of this project/repository.
-    - If not already present, in the `Extension Search Paths`, enter the path that leads to Isaac Lab's extension directory directory (`IsaacLab/source`)
-    - Click on the **Hamburger Icon**, then click `Refresh`.
-
-2. **Search and enable your extension**:
-    - Find your extension under the `Third Party` category.
-    - Toggle it to enable your extension.
-
-## Code formatting
-
-We have a pre-commit template to automatically format your code.
-To install pre-commit:
+```
+/home/fortiss/peg_insertion/contact_force_logs
+```
+- To record and debug contact force data, you must run the policy using the following command with a single environment:
 
 ```bash
-pip install pre-commit
+python scripts/rl_games/play.py --task=Isaac-Factory-PegInsert-Direct-v0 --num_envs 1 --headless
 ```
 
-Then you can run pre-commit with:
-
-```bash
-pre-commit run --all-files
-```
-
-## Troubleshooting
-
-### Pylance Missing Indexing of Extensions
-
-In some VsCode versions, the indexing of part of the extensions is missing.
-In this case, add the path to your extension in `.vscode/settings.json` under the key `"python.analysis.extraPaths"`.
-
-```json
-{
-    "python.analysis.extraPaths": [
-        "<path-to-ext-repo>/source/peg_insertion"
-    ]
-}
-```
-
-### Pylance Crash
-
-If you encounter a crash in `pylance`, it is probable that too many files are indexed and you run out of memory.
-A possible solution is to exclude some of omniverse packages that are not used in your project.
-To do so, modify `.vscode/settings.json` and comment out packages under the key `"python.analysis.extraPaths"`
-Some examples of packages that can likely be excluded are:
-
-```json
-"<path-to-isaac-sim>/extscache/omni.anim.*"         // Animation packages
-"<path-to-isaac-sim>/extscache/omni.kit.*"          // Kit UI tools
-"<path-to-isaac-sim>/extscache/omni.graph.*"        // Graph UI tools
-"<path-to-isaac-sim>/extscache/omni.services.*"     // Services tools
-...
-```
