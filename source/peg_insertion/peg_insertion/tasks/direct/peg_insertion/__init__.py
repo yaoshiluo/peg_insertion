@@ -15,7 +15,8 @@ from .factory_env_cfg import FactoryTaskGearMeshCfg, FactoryTaskNutThreadCfg, Fa
 
 gym.register(
     id="Isaac-Factory-PegInsert-Direct-v0",
-    entry_point="isaaclab_tasks.direct.factory:FactoryEnv",
+    # entry_point="isaaclab_tasks.direct.factory:FactoryEnv",
+    entry_point="peg_insertion.tasks.direct.peg_insertion:FactoryEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": FactoryTaskPegInsertCfg,

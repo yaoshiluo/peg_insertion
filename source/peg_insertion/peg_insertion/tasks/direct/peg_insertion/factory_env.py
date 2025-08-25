@@ -21,6 +21,7 @@ import os
 import numpy as np 
 
 from . import factory_control as fc
+from . import forge_utils
 from .factory_env_cfg import OBS_DIM_CFG, STATE_DIM_CFG, FactoryEnvCfg
 
 
@@ -130,14 +131,10 @@ class FactoryEnv(DirectRLEnv):
         self.right_finger_body_idx = self._robot.body_names.index("panda_rightfinger")
         self.fingertip_body_idx = self._robot.body_names.index("panda_fingertip_centered")
 
-        # Force sensor noisy readings
-        # self.left_force = torch.zeros((self.num_envs, 3), device=self.device)
-        # self.right_force = torch.zeros((self.num_envs, 3), device=self.device)
-        self.contact_force_vec = torch.zeros((self.num_envs, 3), device=self.device)
-
-        # self.force_sensor = self._robot.body_names.index("force_sensor")
-        self.left_force_base = torch.zeros((self.num_envs, 3), device=self.device)
-        self.right_force_base = torch.zeros((self.num_envs, 3), device=self.device)
+        # Force sensor information.
+        self.force_sensor_body_idx = self._robot.body_names.index("force_sensor")
+        self.force_sensor_smooth = torch.zeros((self.num_envs, 6), device=self.device)
+        self.force_sensor_world_smooth = torch.zeros((self.num_envs, 6), device=self.device)
 
         self._log_force_dir = os.path.join(os.getcwd(), "contact_force_logs")
         os.makedirs(os.path.join(self._log_force_dir, "contact_force"), exist_ok=True)
@@ -246,19 +243,34 @@ class FactoryEnv(DirectRLEnv):
         self.joint_pos = self._robot.data.joint_pos.clone()
         self.joint_vel = self._robot.data.joint_vel.clone()
 
-        hand_force = self._force_sensor.data.net_forces_w[:, 0, :]
+        # hand_force = self._force_sensor.data.net_forces_w[:, 0, :]
+        # Update and smooth force values.
+        self.force_sensor_world = self._robot.root_physx_view.get_link_incoming_joint_force()[
+            :, self.force_sensor_body_idx
+        ]
 
-        # 2. Add Gaussian noise (standard deviation can be configured)
-        noise_std = self.cfg.sensor.force_noise_std  # e.g., 0.01 N
-        # noise_left = torch.randn_like(left_force) * noise_std
-        # noise_right = torch.randn_like(right_force) * noise_std
-        noise_hand = torch.randn_like(hand_force) * noise_std
+        alpha = self.cfg.ctrl.ft_smoothing_factor
+        self.force_sensor_world_smooth = alpha * self.force_sensor_world + (1 - alpha) * self.force_sensor_world_smooth
 
-        # self.contact_force_vec = -hand_force + noise_hand
-        self.contact_force_vec = -hand_force
-        # self.contact_force_vec = hand_force
-        # print("contact_force_vec:", self._force_sensor.data.net_forces_w[:, 0, :])
-        # print("contact_force_vec:", self.contact_force_vec)
+        self.force_sensor_smooth = torch.zeros_like(self.force_sensor_world)
+        identity_quat = torch.tensor([1.0, 0.0, 0.0, 0.0], device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
+        self.force_sensor_smooth[:, :3], self.force_sensor_smooth[:, 3:6] = forge_utils.change_FT_frame(
+            self.force_sensor_world_smooth[:, 0:3],
+            self.force_sensor_world_smooth[:, 3:6],
+            (identity_quat, torch.zeros((self.num_envs, 3), device=self.device)),
+            (identity_quat, self.fixed_pos_obs_frame + self.init_fixed_pos_obs_noise),
+        )
+
+        # Compute noisy force values.
+        force_noise = torch.randn((self.num_envs, 3), dtype=torch.float32, device=self.device)
+        force_noise *= self.cfg.obs_rand.ft_force
+        self.noisy_force = self.force_sensor_smooth[:, 0:3] + force_noise
+
+
+        self.contact_force_vec = self.noisy_force
+        print("contact_force_vec shape:", self.contact_force_vec.shape)
+        print("contact_force_vec (first 5):\n", self.contact_force_vec[:5])
+
 
         # Finite-differencing results in more reliable velocity estimates.
         self.ee_linvel_fd = (self.fingertip_midpoint_pos - self.prev_fingertip_pos) / dt
@@ -337,7 +349,7 @@ class FactoryEnv(DirectRLEnv):
             "rot_threshold": self.rot_threshold,
             "wrench_threshold": self.wrench_threshold,
             # "ctrl_target_fingertip_contact_wrench": self.ctrl_target_fingertip_contact_wrench,
-            "contact_force_vec": self.contact_force_vec,
+            "ft_force": self.force_sensor_smooth[:, 0:3],
             "prev_actions": prev_actions,
         }
         obs_tensors = [obs_dict[obs_name] for obs_name in self.cfg.obs_order + ["prev_actions"]]
@@ -617,16 +629,6 @@ class FactoryEnv(DirectRLEnv):
         #     adjusted_progress = (progress - 0.5) * 2.0  # 映射到 [0.0, 1.0]
         #     self.cfg_task.force_penalty_scale = 0.1 + 0.9 * adjusted_progress
 
-        # sdf_reward = get_sdf_reward(
-        #     wp_plug_meshes_sampled_points=self.wp_plug_meshes_sampled_points,
-        #     asset_indices=self.asset_indices,
-        #     plug_pos=self.held_base_pos,
-        #     plug_quat=self.held_base_quat,
-        #     plug_goal_sdfs=self.plug_goal_sdfs,
-        #     wp_device=self.wp_device,
-        #     torch_device=self.device,
-        # )
-        # print(f"[DEBUG] SDF Reward mean: {sdf_reward.mean().item():.6f}, min: {sdf_reward.min().item():.6f}, max: {sdf_reward.max().item():.6f}")
         # Keypoint rewards.
         def squashing_fn(x, a, b):
             return 1 / (torch.exp(a * x) + b + torch.exp(-a * x))

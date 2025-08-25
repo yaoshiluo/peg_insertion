@@ -18,26 +18,15 @@ from isaaclab_assets.robots import FRANKA_PANDA_CFG
 
 from .factory_tasks_cfg import ASSET_DIR, FactoryTask, GearMesh, NutThread, PegInsert
 
-# OBS_DIM_CFG = {
-#     "joint_pos": 7,
-#     "fingertip_pos": 3,
-#     "fingertip_pos_rel_fixed": 3,
-#     "fingertip_quat": 4,
-#     "goal_pos_offset": 3,
-#     "fixed_quat": 4,
-#     "ee_linvel": 3,
-#     "ee_angvel": 3,
-#     # "ctrl_target_fingertip_contact_wrench": 6,
-#     "contact_force_vec": 3,
-# }
 OBS_DIM_CFG = {
-    "joint_pos": 7,
     "fingertip_pos": 3,
+    "fingertip_pos_rel_fixed": 3,
     "fingertip_quat": 4,
+    "ee_linvel": 3,
+    "ee_angvel": 3,
     "goal_pos_offset": 3,
     "fixed_quat": 4,
-    "fingertip_pos_rel_fixed": 3,
-    "contact_force_vec": 3,
+    "contact_force_vec":3
 }
 
 STATE_DIM_CFG = {
@@ -58,7 +47,7 @@ STATE_DIM_CFG = {
     "rot_threshold": 3,
     "wrench_threshold": 6,
     # "ctrl_target_fingertip_contact_wrench": 6,
-    "contact_force_vec": 3,
+    "ft_force": 3,
 }
 
 @configclass
@@ -91,6 +80,7 @@ class EventCfg:
 @configclass
 class ObsRandCfg:
     fixed_asset_pos = [0.001, 0.001, 0.001]
+    ft_force = 1.0
 
 @configclass
 class SensorCfg:
@@ -100,6 +90,7 @@ class SensorCfg:
 @configclass
 class CtrlCfg:
     ema_factor = 0.2
+    ft_smoothing_factor: float = 0.25
 
     pos_action_bounds = [0.05, 0.05, 0.05]
     rot_action_bounds = [1.0, 1.0, 1.0]
@@ -146,7 +137,7 @@ class FactoryEnvCfg(DirectRLEnvCfg):
         "fixed_pos",
         "fixed_quat",
         # "ctrl_target_fingertip_contact_wrench",
-        "contact_force_vec",
+        "ft_force",
 
     ]
 
